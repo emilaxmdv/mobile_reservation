@@ -1,0 +1,23 @@
+rules_version = '2';
+
+// TƏHLÜKƏSİZLİK MODELİ:
+// Client tərəfdən Firestore-a HEÇ BİR birbaşa giriş yoxdur.
+// Bütün yazılar yalnız Cloud Functions (Admin SDK) üzərindən gedir —
+// Admin SDK bu qaydalara tabe deyil, ona görə funksiyalar işləməyə davam edir.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Yeganə istisna: ictimai sayğac sənədi.
+    // İçində YALNIZ rəqəm var (totalReservations) — heç bir müştəri məlumatı
+    // (ad, telefon, tarix) burada saxlanmamalıdır. Yazmaq yenə də qadağandır.
+    match /publicStats/summary {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Qalan hər şey (reservations daxil olmaqla) client üçün tam bağlıdır.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

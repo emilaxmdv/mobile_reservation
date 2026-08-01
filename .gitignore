@@ -1,0 +1,27 @@
+# Asılılıqlar
+node_modules/
+
+# Build nəticələri
+frontend/dist/
+
+# Mühit dəyişənləri — SİRLƏR HEÇ VAXT commit olunmur
+.env
+.env.*
+!.env.example
+
+# Service account açarı (yalnız Vercel env-də saxlanılır)
+*serviceAccount*.json
+
+# Vercel
+.vercel/
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+
+# Redaktor / OS
+.DS_Store
+.idea/
+.vscode/
+*.log
