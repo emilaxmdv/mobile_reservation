@@ -4,7 +4,7 @@ import { optionalEnv, requireEnv } from "./_lib/env";
 import { getDb } from "./_lib/firebase";
 import { ReservationDoc } from "./_lib/types";
 import { addDaysToDateString, bakuDateString, formatDateAz } from "./_lib/utils";
-import { sendTextMessage, whatsappConfigFromEnv } from "./_lib/whatsapp";
+import { messagingConfigFromEnv, sendText } from "./_lib/messaging";
 
 /**
  * /api/birthday-check — köhnə scheduled Cloud Function-un yerini tutur.
@@ -58,8 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       if (!uniqueByPhone.has(r.phone)) uniqueByPhone.set(r.phone, r);
     }
 
-    const cfg = whatsappConfigFromEnv();
-    // Xatırlatma sahibin nömrəsinə gedir; təyin olunmayıbsa mütəxəssisə.
+    const cfg = messagingConfigFromEnv();
     const recipientNumber =
       optionalEnv("OWNER_WHATSAPP_NUMBER") ?? requireEnv("SPECIALIST_WHATSAPP_NUMBER");
 
@@ -69,7 +68,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         `Xatırlatma: ${r.firstName} ${r.lastName}-ın doğum günü ` +
         `${formatDateAz(targetDate)}-dir (7 gün qalıb).`;
       try {
-        await sendTextMessage(cfg, recipientNumber, message);
+        await sendText(cfg, recipientNumber, message);
         sent++;
       } catch (err) {
         console.error("Doğum günü xatırlatması göndərilə bilmədi:", r.phone, err);

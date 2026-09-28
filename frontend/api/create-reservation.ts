@@ -16,7 +16,7 @@ import {
   isValidDateString,
   normalizePhone,
 } from "./_lib/utils";
-import { sendInteractiveButtons, whatsappConfigFromEnv } from "./_lib/whatsapp";
+import { messagingConfigFromEnv, sendButtons } from "./_lib/messaging";
 
 /** İstifadəçiyə göstərilən status kodu + Azərbaycan dilində mesaj daşıyan xəta. */
 class ApiError extends Error {
@@ -191,12 +191,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       `Zəhmət olmasa yoxlayın.`;
 
     try {
-      const messageId = await sendInteractiveButtons(
-        whatsappConfigFromEnv(),
+      const cfg = messagingConfigFromEnv();
+      const messageId = await sendButtons(
+        cfg,
         requireEnv("SPECIALIST_WHATSAPP_NUMBER"),
         bodyText,
         [
-          // Düymə ID-ləri webhook-da geri açılır: "<əməliyyat>:<sənəd ID>"
           { id: `confirm:${reservationId}`, title: "Təsdiq et" },
           { id: `decline:${reservationId}`, title: "Ləğv et" },
         ]
