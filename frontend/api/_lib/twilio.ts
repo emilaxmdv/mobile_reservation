@@ -1,4 +1,4 @@
-import { requireEnv } from "./env";
+import { optionalEnv, requireEnv } from "./env";
 
 export interface TwilioConfig {
   accountSid: string;
@@ -55,7 +55,15 @@ export async function twilioSendText(
   const params = new URLSearchParams();
   params.set("From", cfg.fromNumber);
   params.set("To", toWhatsApp(to));
-  params.set("Body", body);
+  // Bəzi hesablarda Twilio sərbəst Body-ni rədd edir (21654) — universal "{{1}}"
+  // şablonu təyin olunubsa, bütün mətnlər onun vasitəsilə göndərilir.
+  const textContentSid = optionalEnv("TWILIO_TEXT_CONTENT_SID");
+  if (textContentSid) {
+    params.set("ContentSid", textContentSid);
+    params.set("ContentVariables", JSON.stringify({ "1": body }));
+  } else {
+    params.set("Body", body);
+  }
   return callTwilioApi(cfg, params);
 }
 

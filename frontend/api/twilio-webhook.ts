@@ -163,12 +163,12 @@ async function processReply(
   }
 
   if (newStatus === "confirmed") {
-    const confirmTemplate = optionalEnv("TWILIO_CONFIRM_CONTENT_SID") ?? optionalEnv("WHATSAPP_CONFIRM_TEMPLATE");
+    const confirmTemplate = optionalEnv("TWILIO_CONFIRM_CONTENT_SID");
     const freeText = `Rezervasiyanız təsdiqləndi! Tarix: ${dateAz} ${r.time}, Xidmət: ${r.service}. Görüşərik!`;
     await notifyCustomerMessage(cfg, r.phone, freeText, confirmTemplate, [dateAz, r.time, r.service]);
   } else {
     const bookingLink = requireEnv("BOOKING_LINK");
-    const declineTemplate = optionalEnv("TWILIO_DECLINE_CONTENT_SID") ?? optionalEnv("WHATSAPP_DECLINE_TEMPLATE");
+    const declineTemplate = optionalEnv("TWILIO_DECLINE_CONTENT_SID");
     const freeText =
       `Rezervasiya ləğv edildi.\nTarix: ${dateAz} ${r.time}\nXidmət: ${r.service}\n\nBaşqa tarix seçin: ${bookingLink}`;
     await notifyCustomerMessage(cfg, r.phone, freeText, declineTemplate, [dateAz, r.time, r.firstName, r.service, bookingLink]);
