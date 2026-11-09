@@ -34,13 +34,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
   try {
     const db = getDb();
+    // Yalnız "date" üzrə aralıq sorğusu — Firestore-un avtomatik indeksi kifayətdir,
+    // status kodda süzülür (bir neçə həftəlik rezervasiya azdır).
     const [reservationsSnap, blocksSnap] = await Promise.all([
       db
         .collection(RESERVATIONS_COLLECTION)
-        .where("status", "==", "confirmed")
         .where("date", ">=", from)
         .where("date", "<=", to)
-        .select("date", "time")
+        .select("date", "time", "status")
         .get(),
       db.collection(BLOCKS_COLLECTION).where("date", ">=", from).where("date", "<=", to).get(),
     ]);
@@ -58,8 +59,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       else b.times.forEach((t) => add(b.date, t));
     }
     for (const d of reservationsSnap.docs) {
-      const r = d.data() as Pick<ReservationDoc, "date" | "time">;
-      add(r.date, r.time);
+      const r = d.data() as Pick<ReservationDoc, "date" | "time" | "status">;
+      if (r.status === "confirmed") add(r.date, r.time);
     }
 
     const takenSlots: Record<string, string[]> = {};

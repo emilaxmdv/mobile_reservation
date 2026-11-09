@@ -120,15 +120,7 @@ https://<sizin-domen>/api/telegram-setup?secret=<TELEGRAM_WEBHOOK_SECRET>
 
 Cavab `{"ok":true,"webhookUrl":"…"}` olmalıdır. Bu, webhook-u həmin domenə yönəldir və botun əmr menyusunu (`/bagla`, `/ac`, …) qeyd edir. Domen dəyişəndə təkrar açın.
 
-### 4. Firestore indeksi
-
-`firestore.indexes.json`-a yeni indeks əlavə olunub (`reservations`: `status` + `date`). Deploy:
-
-```bash
-firebase deploy --only firestore:indexes
-```
-
-və ya Firebase Console → Firestore → **Indexes → Composite → Add index**: kolleksiya `reservations`, sahələr `status` (Ascending), `date` (Ascending). İndeks qurulana qədər (bir neçə dəqiqə) `/api/availability` 500 qaytarır.
+> Firestore-da əl ilə heç nə etmək lazım deyil: `blocks` kolleksiyası ilk `/bagla`-da avtomatik yaranır, yeni sorğular yalnız `date` sahəsinin avtomatik indeksindən istifadə edir.
 
 ---
 
@@ -185,7 +177,6 @@ Telegram webhook-u lokal ünvana çata bilmir — botu test etmək üçün deplo
 | Düymələr "yüklənir" qalır | Webhook qeyd olunmayıb → addım 3 |
 | Düymə "icazəniz yoxdur" deyir | Basan işçinin ID-si `TELEGRAM_ADMIN_IDS`-də yoxdur → əlavə edib **Redeploy** |
 | Əmrlərə cavab yoxdur | Eyni səbəb (admin deyil) və ya webhook qeyd olunmayıb |
-| `/api/availability` 500 | Firestore indeksi qurulmayıb → addım 4 |
 | "Mühit dəyişəni çatışmır: …" | Env natamamdır; dəyişəndən sonra **yenidən deploy** lazımdır |
 | Cron işləmir | Vercel → Settings → Cron Jobs; Hobby planda dəqiqlik ±1 saatdır |
 

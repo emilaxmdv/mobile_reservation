@@ -310,14 +310,18 @@ async function reservationsInBlockedSlots(
 ): Promise<string[]> {
   const snap = await db
     .collection(RESERVATIONS_COLLECTION)
-    .where("status", "in", ["pending", "confirmed"])
     .where("date", ">=", dates[0])
     .where("date", "<=", dates[dates.length - 1])
     .get();
   const dateSet = new Set(dates);
   return snap.docs
     .map((d) => d.data() as ReservationDoc)
-    .filter((r) => dateSet.has(r.date) && (times === null || times.includes(r.time)))
+    .filter(
+      (r) =>
+        (r.status === "pending" || r.status === "confirmed") &&
+        dateSet.has(r.date) &&
+        (times === null || times.includes(r.time))
+    )
     .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
     .map(
       (r) =>
