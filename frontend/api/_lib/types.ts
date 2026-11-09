@@ -1,6 +1,7 @@
 import { Timestamp } from "firebase-admin/firestore";
 
-export type ReservationStatus = "pending" | "confirmed" | "declined";
+/** cancelled = əvvəl təsdiqlənmiş, sonra işçi tərəfindən ləğv edilmiş. */
+export type ReservationStatus = "pending" | "confirmed" | "declined" | "cancelled";
 
 /** Client-dən API-yə gələn xam giriş (etibarsız sayılır, tam yoxlanılır). */
 export interface CreateReservationInput {
@@ -31,6 +32,11 @@ export interface ReservationDoc {
   decidedAt: Timestamp | null;
   /** Qərarı verən işçi: "tg:<user id> <ad> (@username)". */
   decidedBy: string | null;
+  cancelledAt?: Timestamp;
+  cancelledBy?: string;
+  /** İşçiyə gedən ilk bildiriş mesajı — ləğvdən sonra onu da yeniləmək üçün. */
+  telegramChatId?: string;
+  telegramMessageId?: number;
 }
 
 /** blocks/{YYYY-MM-DD}: işçinin Telegram-dan bağladığı gün və ya saatlar. */

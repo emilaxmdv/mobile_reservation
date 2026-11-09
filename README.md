@@ -4,7 +4,9 @@ Müştəri Instagram bio-dakı linkə keçib formu doldurur → rezervasiya **pe
 
 Müştəriyə avtomatik mesaj **getmir** — sayt yalnız "Sorğunuz qəbul edildi. Sizinlə əlaqə saxlanılacaq." göstərir.
 
-İşçi Telegram-dan **bütün günü** (qeyri-iş günü) və ya **ayrı saatları** (məs. saytdan kənar gələn müştəri) bağlaya bilər — bağlı gün/saat saytda seçilmir.
+İşçi Telegram-dan **bütün günü** (qeyri-iş günü) və ya **ayrı saatları** (məs. saytdan kənar gələn müştəri) bağlaya bilər — bağlı gün/saat saytda seçilmir. Artıq təsdiqlənmiş rezervasiyanı **🗑 Ləğv et** düyməsi ilə ləğv etmək olar — saat saytda yenidən boşalır.
+
+İş saatları: **10:00 – 18:00** (sonuncu slot 18:00). Siyahı `frontend/api/_lib/constants.ts` və `frontend/src/constants.ts`-dədir (ikisi eyni saxlanmalıdır).
 
 **Backend: Vercel Serverless API Routes.** Firebase yalnız Firestore kimi istifadə olunur — **pulsuz Spark planı kifayətdir**. Telegram Bot API pulsuzdur.
 
@@ -37,7 +39,7 @@ Müştəri (brauzer)                Vercel                                    Te
 │   ├── api/
 │   │   ├── _lib/                # Ortaq kod ("_" prefiksli — endpoint deyil)
 │   │   │   ├── telegram.ts      # Telegram Bot API klienti
-│   │   │   ├── bot.ts           # Düymələr və /bagla, /ac, /baglilar, /id əmrləri
+│   │   │   ├── bot.ts           # Düymələr (təsdiq/ləğv) və /bagla, /ac, /baglilar, /gun, /id əmrləri
 │   │   │   ├── blocks.ts        # Gün/saat bloklama məntiqi (Firestore-suz)
 │   │   │   ├── messages.ts      # Telegram mesaj mətnləri
 │   │   │   ├── firebase.ts, constants.ts, utils.ts, types.ts, env.ts
@@ -60,7 +62,7 @@ Müştəri (brauzer)                Vercel                                    Te
 
 | Kolleksiya | Nə saxlayır |
 |---|---|
-| `reservations/{auto-id}` | Rezervasiyalar (`status`: pending / confirmed / declined). Telegram mesajı üçün `telegramChatId`, `telegramMessageId` əlavə olunur |
+| `reservations/{auto-id}` | Rezervasiyalar (`status`: pending / confirmed / declined / cancelled — sonuncu təsdiqdən sonra ləğv edilmiş, `cancelledBy`, `cancelledAt` ilə). Telegram mesajı üçün `telegramChatId`, `telegramMessageId` əlavə olunur |
 | `blocks/{YYYY-MM-DD}` | Bağlı gün/saatlar: `{ date, allDay, times[], reason, updatedBy, updatedAt }` |
 | `publicStats/summary` | İctimai sayğac |
 
@@ -136,12 +138,17 @@ Cavab `{"ok":true,"webhookUrl":"…"}` olmalıdır. Bu, webhook-u həmin domenə
 | `/bagla sabah 12:00 kənar müştəri` | Sonda səbəb yazmaq olar |
 | `/ac …` | Eyni formatla açır. Bütün gün bağlıdırsa `/ac 15.11 14:00` yalnız 14:00-ı açır |
 | `/baglilar` | Gələcək bağlı gün və saatlar |
+| `/gun 15.11` | Həmin günün rezervasiyaları (✅ təsdiqlənmiş, ⏳ gözləmədə) və bağlı saatlar; təsdiqlənmişlər üçün 🗑 düymələri. Tarixsiz `/gun` — bu gün |
 | `/id` | Telegram ID-ni göstərir (hamı üçün) |
 | `/komek` | Əmrlərin izahı |
 
 Tarix formatları: `15.11`, `15.11.2026`, `2026-11-15`, `bugun`, `sabah`. Saat: `14`, `14:00`, `14.00`.
 
 Bağlanan vaxtda gözləmədə və ya təsdiqlənmiş rezervasiya varsa, bot xəbərdarlıq edir. Bağlı saatdakı sorğunu təsdiqləmək olmur (əvvəlcə `/ac`).
+
+### Təsdiqlənmiş rezervasiyanı ləğv etmək
+
+Təsdiqdən sonra bildiriş mesajında **🗑 Ləğv et** düyməsi qalır (köhnə mesajı tapmaq çətindirsə — `/gun 15.11`). Basanda bot ayrıca soruşur: **✅ Bəli, ləğv et / ↩️ Xeyr**. "Bəli"dən sonra status `cancelled` olur, ilk bildiriş mesajı "Təsdiqdən sonra ləğv edildi" kimi yenilənir və saat saytda yenidən boş görünür. Müştəriyə avtomatik heç nə getmir — onunla özünüz əlaqə saxlayın.
 
 ## Doğum günü xatırlatması
 

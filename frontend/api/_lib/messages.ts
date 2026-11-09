@@ -29,19 +29,28 @@ export function newReservationHtml(r: ReservationView): string {
   return `🆕 <b>Yeni rezervasiya</b>\n\n${reservationHtml(r)}\n\nMüştəri ilə əlaqə saxlayıb qərar verin.`;
 }
 
+const STATUS_HEAD: Record<ReservationStatus, string> = {
+  pending: "⏳ <b>Gözləmədə</b>",
+  confirmed: "✅ <b>Təsdiqləndi</b>",
+  declined: "❌ <b>Ləğv edildi</b>",
+  cancelled: "🗑 <b>Təsdiqdən sonra ləğv edildi</b>",
+};
+
+export function personLabel(by: string | null | undefined): string {
+  return by ? escapeHtml(by.replace(/^tg:\d+\s*/, "")) : "";
+}
+
 export function decidedReservationHtml(
   r: ReservationView,
   status: ReservationStatus,
-  decidedBy: string | null
+  by: string | null | undefined
 ): string {
-  const head =
-    status === "confirmed"
-      ? "✅ <b>Təsdiqləndi</b>"
-      : status === "declined"
-        ? "❌ <b>Ləğv edildi</b>"
-        : "⏳ <b>Gözləmədə</b>";
-  const by = decidedBy ? ` — ${escapeHtml(decidedBy.replace(/^tg:\d+\s*/, ""))}` : "";
-  return `${head}${by}\n\n${reservationHtml(r)}`;
+  const who = personLabel(by);
+  return `${STATUS_HEAD[status]}${who ? ` — ${who}` : ""}\n\n${reservationHtml(r)}`;
+}
+
+export function shortReservationLabel(r: Pick<ReservationDoc, "date" | "time" | "firstName" | "lastName">): string {
+  return `${dateLabel(r.date)} ${r.time} — ${escapeHtml(`${r.firstName} ${r.lastName}`)}`;
 }
 
 export function blockStateLabel(state: BlockState | null): string {
@@ -66,6 +75,9 @@ export const HELP_HTML = [
   "<code>/ac 15.11</code> · <code>/ac 15.11 14:00</code>",
   "",
   "<code>/baglilar</code> — gələcək bağlı gün və saatlar",
+  "<code>/gun 15.11</code> — həmin günün rezervasiyaları (təsdiqlənmişləri buradan ləğv etmək olar)",
+  "",
+  "Təsdiqlənmiş rezervasiyanın mesajındakı <b>🗑 Ləğv et</b> düyməsi saatı saytda yenidən boşaldır.",
   "<code>/id</code> — Telegram ID-nizi göstərir",
   "",
   "Tarix formatları: <code>15.11</code>, <code>15.11.2026</code>, <code>2026-11-15</code>, <code>bugun</code>, <code>sabah</code>",

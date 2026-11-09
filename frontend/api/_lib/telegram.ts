@@ -77,12 +77,13 @@ export async function sendMessage(
   return result.message_id;
 }
 
-/** Mesajın mətnini dəyişir. reply_markup verilmədikdə inline düymələr silinir. */
+/** Mesajın mətnini dəyişir. buttons verilmədikdə inline düymələr silinir. */
 export async function editMessageText(
   cfg: TelegramConfig,
   chatId: string | number,
   messageId: number,
-  html: string
+  html: string,
+  buttons?: InlineButton[][]
 ): Promise<void> {
   await callApi(cfg, "editMessageText", {
     chat_id: chatId,
@@ -90,6 +91,7 @@ export async function editMessageText(
     text: html,
     parse_mode: "HTML",
     link_preview_options: { is_disabled: true },
+    ...(buttons ? { reply_markup: { inline_keyboard: buttons } } : {}),
   });
 }
 

@@ -1,5 +1,5 @@
-// Telegram webhook-una gələn update-lərin emalı: Təsdiq/Ləğv düymələri və
-// /bagla, /ac, /baglilar, /id, /komek əmrləri.
+// Telegram webhook-una gələn update-lərin emalı: Təsdiq/Ləğv düymələri,
+// təsdiqlənmiş rezervasiyanın ləğvi və /bagla, /ac, /baglilar, /gun, /id, /komek əmrləri.
 
 import { FieldValue, Firestore } from "firebase-admin/firestore";
 import {
@@ -8,6 +8,7 @@ import {
   BlockState,
   isSlotBlocked,
   parseBlockArgs,
+  parseDateToken,
   sameBlockState,
 } from "./blocks";
 import { BLOCKS_COLLECTION, RESERVATIONS_COLLECTION } from "./constants";
@@ -17,17 +18,20 @@ import {
   dateLabel,
   decidedReservationHtml,
   HELP_HTML,
+  personLabel,
+  shortReservationLabel,
 } from "./messages";
 import {
   adminIdsFromEnv,
   answerCallbackQuery,
   editMessageText,
   escapeHtml,
+  InlineButton,
   sendMessage,
   TelegramConfig,
 } from "./telegram";
 import type { BlockDoc, ReservationDoc } from "./types";
-import { bakuDateString } from "./utils";
+import { bakuDateString, formatPhoneDisplay } from "./utils";
 
 // ── Telegram update tipləri (yalnız istifadə etdiyimiz sahələr) ──────────────
 interface TgUser {
@@ -58,6 +62,7 @@ export const BOT_COMMANDS = [
   { command: "bagla", description: "Gün və ya saatı bağla: /bagla 15.11 14:00" },
   { command: "ac", description: "Bağlı gün/saatı aç: /ac 15.11 14:00" },
   { command: "baglilar", description: "Gələcək bağlı gün və saatlar" },
+  { command: "gun", description: "Günün rezervasiyaları: /gun 15.11" },
   { command: "komek", description: "Əmrlərin izahı" },
   { command: "id", description: "Telegram ID-nizi göstərir" },
 ];
@@ -129,6 +134,33 @@ async function decide(
   });
 }
 
+const cancelButton = (id: string): InlineButton[][] => [
+  [{ text: "🗑 Ləğv et", callback_data: `cancel:${id}` }],
+];
+
+/** Rezervasiya mesajının statusa uyğun mətni və düymələri. */
+function statusView(id: string, r: ReservationDoc): { html: string; buttons?: InlineButton[][] } {
+  const by = r.status === "cancelled" ? r.cancelledBy : r.decidedBy;
+  return {
+    html: decidedReservationHtml(r, r.status, by),
+    buttons: r.status === "confirmed" ? cancelButton(id) : undefined,
+  };
+}
+
+/** Bildiriş mesajını yeniləyir; "message is not modified" kimi xətalar əməliyyatı pozmur. */
+async function safeEdit(
+  cfg: TelegramConfig,
+  chatId: string | number | undefined,
+  messageId: number | undefined,
+  html: string,
+  buttons?: InlineButton[][]
+): Promise<void> {
+  if (chatId === undefined || messageId === undefined) return;
+  await editMessageText(cfg, chatId, messageId, html, buttons).catch((err) =>
+    console.warn("Mesaj redaktə olunmadı:", err)
+  );
+}
+
 async function handleCallback(cq: TgCallbackQuery, cfg: TelegramConfig): Promise<void> {
   if (!isAdmin(cq.from)) {
     await answerCallbackQuery(cfg, cq.id, "Bu əməliyyat üçün icazəniz yoxdur.", true);
@@ -136,7 +168,15 @@ async function handleCallback(cq: TgCallbackQuery, cfg: TelegramConfig): Promise
   }
 
   const [action, reservationId] = (cq.data ?? "").split(":");
-  if ((action !== "confirm" && action !== "decline") || !reservationId) {
+  if (!reservationId) {
+    await answerCallbackQuery(cfg, cq.id);
+    return;
+  }
+  if (action === "cancel" || action === "cancel_yes" || action === "cancel_no") {
+    await handleCancelCallback(cq, cfg, action, reservationId);
+    return;
+  }
+  if (action !== "confirm" && action !== "decline") {
     await answerCallbackQuery(cfg, cq.id);
     return;
   }
@@ -150,14 +190,8 @@ async function handleCallback(cq: TgCallbackQuery, cfg: TelegramConfig): Promise
 
   const msg = cq.message;
   const refreshMessage = async (r: ReservationDoc) => {
-    if (!msg) return;
-    // "message is not modified" kimi xətalar qərarı pozmur
-    await editMessageText(
-      cfg,
-      msg.chat.id,
-      msg.message_id,
-      decidedReservationHtml(r, r.status, r.decidedBy)
-    ).catch((err) => console.warn("Mesaj redaktə olunmadı:", err));
+    const view = statusView(reservationId, r);
+    await safeEdit(cfg, msg?.chat.id, msg?.message_id, view.html, view.buttons);
   };
 
   switch (outcome.kind) {
@@ -199,6 +233,96 @@ async function handleCallback(cq: TgCallbackQuery, cfg: TelegramConfig): Promise
   }
 }
 
+// ── Təsdiqlənmiş rezervasiyanın ləğvi ───────────────────────────────────────
+// "🗑 Ləğv et" → ayrıca təsdiq mesajı (Bəli / Xeyr) → status "cancelled",
+// saat saytda yenidən boşalır.
+
+async function handleCancelCallback(
+  cq: TgCallbackQuery,
+  cfg: TelegramConfig,
+  action: "cancel" | "cancel_yes" | "cancel_no",
+  reservationId: string
+): Promise<void> {
+  const db = getDb();
+  const ref = db.collection(RESERVATIONS_COLLECTION).doc(reservationId);
+  const msg = cq.message;
+
+  if (action === "cancel_no") {
+    await safeEdit(cfg, msg?.chat.id, msg?.message_id, "↩️ Ləğv edilmədi, rezervasiya qüvvədədir.");
+    await answerCallbackQuery(cfg, cq.id);
+    return;
+  }
+
+  if (action === "cancel") {
+    const snap = await ref.get();
+    if (!snap.exists) {
+      await answerCallbackQuery(cfg, cq.id, "Rezervasiya tapılmadı (silinib?).", true);
+      return;
+    }
+    const r = snap.data() as ReservationDoc;
+    if (r.status !== "confirmed") {
+      await answerCallbackQuery(cfg, cq.id, "Bu rezervasiya təsdiqlənmiş deyil — ləğv ediləcək bir şey yoxdur.", true);
+      return;
+    }
+    await sendMessage(
+      cfg,
+      msg?.chat.id ?? r.telegramChatId!,
+      `🗑 <b>Ləğv edilsin?</b>\n${shortReservationLabel(r)}\n\nSaat saytda yenidən boş görünəcək.`,
+      [
+        [
+          { text: "✅ Bəli, ləğv et", callback_data: `cancel_yes:${reservationId}` },
+          { text: "↩️ Xeyr", callback_data: `cancel_no:${reservationId}` },
+        ],
+      ]
+    );
+    await answerCallbackQuery(cfg, cq.id);
+    return;
+  }
+
+  // cancel_yes
+  const by = userLabel(cq.from);
+  const result = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return { kind: "not-found" as const };
+    const r = snap.data() as ReservationDoc;
+    if (r.status !== "confirmed") return { kind: "not-confirmed" as const, r };
+    tx.update(ref, {
+      status: "cancelled",
+      updatedAt: FieldValue.serverTimestamp(),
+      cancelledAt: FieldValue.serverTimestamp(),
+      cancelledBy: by,
+    });
+    return { kind: "cancelled" as const, r: { ...r, status: "cancelled" as const, cancelledBy: by } };
+  });
+
+  if (result.kind === "not-found") {
+    await answerCallbackQuery(cfg, cq.id, "Rezervasiya tapılmadı (silinib?).", true);
+    return;
+  }
+  if (result.kind === "not-confirmed") {
+    await safeEdit(
+      cfg,
+      msg?.chat.id,
+      msg?.message_id,
+      `Dəyişiklik yoxdur — rezervasiya artıq ${result.r.status === "cancelled" ? "ləğv edilib" : "təsdiqlənmiş deyil"}.\n${shortReservationLabel(result.r)}`
+    );
+    await answerCallbackQuery(cfg, cq.id);
+    return;
+  }
+
+  const r = result.r;
+  await safeEdit(
+    cfg,
+    msg?.chat.id,
+    msg?.message_id,
+    `🗑 <b>Ləğv edildi</b> — ${personLabel(by)}\n${shortReservationLabel(r)}\nSaat saytda yenidən boşdur.`
+  );
+  // İlk bildiriş mesajını da yenilə ki, orada köhnə "Təsdiqləndi" + düymə qalmasın
+  const view = statusView(reservationId, r);
+  await safeEdit(cfg, r.telegramChatId, r.telegramMessageId, view.html, view.buttons);
+  await answerCallbackQuery(cfg, cq.id, "Ləğv edildi. Saat yenidən boşdur.");
+}
+
 // ── Əmrlər ───────────────────────────────────────────────────────────────────
 
 async function handleCommand(msg: TgMessage, cfg: TelegramConfig): Promise<void> {
@@ -238,6 +362,11 @@ async function handleCommand(msg: TgMessage, cfg: TelegramConfig): Promise<void>
     case "baglilar":
       await reply(await listBlocks(today));
       return;
+    case "gun": {
+      const day = await dayOverview(args, today);
+      await sendMessage(cfg, msg.chat.id, day.html, day.buttons);
+      return;
+    }
     default:
       await reply("Naməlum əmr. /komek yazın.");
   }
@@ -328,6 +457,55 @@ async function reservationsInBlockedSlots(
         `• ${dateLabel(r.date)} ${r.time} — ${escapeHtml(`${r.firstName} ${r.lastName}`)} ` +
         `(${r.status === "confirmed" ? "təsdiqlənib" : "gözləmədə"})`
     );
+}
+
+/** /gun <tarix>: həmin günün rezervasiyaları + bağlı saatlar; təsdiqlənmişlər üçün 🗑 düymələri. */
+async function dayOverview(
+  args: string[],
+  today: string
+): Promise<{ html: string; buttons?: InlineButton[][] }> {
+  const date = args.length ? parseDateToken(args[0], today) : today;
+  if (!date) {
+    return { html: "⚠️ Tarixi anlamadım. Nümunə: <code>/gun 15.11</code>, <code>/gun bugun</code>, <code>/gun sabah</code>" };
+  }
+
+  const db = getDb();
+  const [resSnap, blockSnap] = await Promise.all([
+    db.collection(RESERVATIONS_COLLECTION).where("date", "==", date).get(),
+    db.collection(BLOCKS_COLLECTION).doc(date).get(),
+  ]);
+  const block = blockSnap.exists ? (blockSnap.data() as BlockDoc) : null;
+  const items = resSnap.docs
+    .map((d) => ({ id: d.id, r: d.data() as ReservationDoc }))
+    .filter(({ r }) => r.status === "pending" || r.status === "confirmed")
+    .sort((a, b) => a.r.time.localeCompare(b.r.time));
+
+  const lines = [`📅 <b>${dateLabel(date)}</b>`];
+  if (block) {
+    const reason = block.reason ? ` — <i>${escapeHtml(block.reason)}</i>` : "";
+    lines.push(`🔒 ${blockStateLabel({ allDay: block.allDay, times: block.times })}${reason}`);
+  }
+  if (items.length === 0) {
+    lines.push("", "Aktiv rezervasiya yoxdur.");
+    return { html: lines.join("\n") };
+  }
+  lines.push("");
+  for (const { r } of items) {
+    const mark = r.status === "confirmed" ? "✅" : "⏳";
+    lines.push(
+      `${mark} ${r.time} — ${escapeHtml(`${r.firstName} ${r.lastName}`)} · ${escapeHtml(r.service)} · ${formatPhoneDisplay(r.phone)}`
+    );
+  }
+  const confirmed = items.filter(({ r }) => r.status === "confirmed");
+  if (confirmed.length) lines.push("", "Təsdiqlənmişi ləğv etmək üçün aşağıdakı düyməni basın.");
+  return {
+    html: lines.join("\n"),
+    buttons: confirmed.length
+      ? confirmed.map(({ id, r }) => [
+          { text: `🗑 ${r.time} ${r.firstName} ${r.lastName}`.slice(0, 60), callback_data: `cancel:${id}` },
+        ])
+      : undefined,
+  };
 }
 
 async function listBlocks(today: string): Promise<string> {
