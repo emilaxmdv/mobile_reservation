@@ -1,20 +1,15 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { SERVICES, TIME_SLOTS } from "../constants";
-import { createReservation } from "../lib/api";
-import type { ReservationInput } from "../types";
+import { createReservation, fetchAvailability } from "../lib/api";
+import { bakuNowTime, bakuToday, daysInMonth, isoDate } from "../lib/dates";
+import type { Availability, ReservationInput } from "../types";
+import DatePicker, { DayState, YearMonth } from "./DatePicker";
 
 interface Props {
   onSuccess: (reservation: ReservationInput) => void;
 }
 
-/** Bu günün tarixi "YYYY-MM-DD" formatında (date input-un min dəyəri üçün). */
-function todayString(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
+const monthKeyOf = (date: string) => date.slice(0, 7);
 
 export default function ReservationForm({ onSuccess }: Props) {
   const [firstName, setFirstName] = useState("");
@@ -27,7 +22,60 @@ export default function ReservationForm({ onSuccess }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const today = useMemo(todayString, []);
+  const today = useMemo(bakuToday, []);
+  const [month, setMonth] = useState<YearMonth>(() => {
+    const [y, m] = today.split("-").map(Number);
+    return { y, m };
+  });
+  // "YYYY-MM" → həmin ayın dolu/bağlı vaxtları
+  const [availability, setAvailability] = useState<Record<string, Availability>>({});
+  const [loadingMonth, setLoadingMonth] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
+
+  useEffect(() => {
+    const monthStart = isoDate(month.y, month.m, 1);
+    const from = monthStart < today ? today : monthStart;
+    const to = isoDate(month.y, month.m, daysInMonth(month.y, month.m));
+    let cancelled = false;
+    setLoadingMonth(true);
+    fetchAvailability(from, to).then((a) => {
+      if (cancelled) return;
+      setLoadingMonth(false);
+      if (a) setAvailability((prev) => ({ ...prev, [monthKeyOf(monthStart)]: a }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [month, today, reloadTick]);
+
+  const nowTime = bakuNowTime();
+
+  const slotUnavailable = (d: string, slot: string): boolean => {
+    if (d === today && slot <= nowTime) return true;
+    return availability[monthKeyOf(d)]?.takenSlots[d]?.includes(slot) ?? false;
+  };
+
+  const dayState = (d: string): DayState => {
+    if (d < today) return "past";
+    if (availability[monthKeyOf(d)]?.closedDays.includes(d)) return "closed";
+    if (TIME_SLOTS.every((s) => slotUnavailable(d, s))) return "full";
+    return "available";
+  };
+
+  // Seçilmiş gün/saat sonradan dolu çıxsa (yeni məlumat gəldi) seçimi təmizlə
+  useEffect(() => {
+    if (date && dayState(date) !== "available") {
+      setDate("");
+      setTime("");
+    } else if (date && time && slotUnavailable(date, time)) {
+      setTime("");
+    }
+  }, [availability]);
+
+  function selectDate(d: string) {
+    setDate(d);
+    if (time && slotUnavailable(d, time)) setTime("");
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -72,6 +120,8 @@ export default function ReservationForm({ onSuccess }: Props) {
       } else {
         setError("Xəta baş verdi. Zəhmət olmasa bir azdan yenidən cəhd edin.");
       }
+      // Bu arada vaxt tutulmuş ola bilər — təqvimi yenilə
+      setReloadTick((t) => t + 1);
     } finally {
       setSubmitting(false);
     }
@@ -109,7 +159,7 @@ export default function ReservationForm({ onSuccess }: Props) {
       </div>
 
       <div className="field">
-        <label htmlFor="phone">Telefon (WhatsApp)</label>
+        <label htmlFor="phone">Telefon</label>
         <input
           id="phone"
           type="tel"
@@ -119,7 +169,7 @@ export default function ReservationForm({ onSuccess }: Props) {
           autoComplete="tel"
           required
         />
-        <p className="hint">Təsdiq bildirişi bu nömrəyə göndəriləcək.</p>
+        <p className="hint">Bu nömrə ilə sizinlə əlaqə saxlanılacaq.</p>
       </div>
 
       <div className="field">
@@ -142,32 +192,39 @@ export default function ReservationForm({ onSuccess }: Props) {
       </div>
 
       <div className="field">
-        <label htmlFor="date">Tarix</label>
-        <input
-          id="date"
-          type="date"
+        <label>Tarix</label>
+        <DatePicker
           value={date}
-          min={today}
-          onChange={(e) => setDate(e.target.value)}
-          required
+          onChange={selectDate}
+          today={today}
+          month={month}
+          onMonthChange={setMonth}
+          dayState={dayState}
+          loading={loadingMonth}
         />
       </div>
 
       <div className="field">
         <label>Saat</label>
+        {!date && <p className="hint">Əvvəlcə tarix seçin.</p>}
         <div className="slot-grid" role="radiogroup" aria-label="Saat seçimi">
-          {TIME_SLOTS.map((slot) => (
-            <button
-              key={slot}
-              type="button"
-              role="radio"
-              aria-checked={time === slot}
-              className={`slot ${time === slot ? "slot-active" : ""}`}
-              onClick={() => setTime(slot)}
-            >
-              {slot}
-            </button>
-          ))}
+          {TIME_SLOTS.map((slot) => {
+            const unavailable = !date || slotUnavailable(date, slot);
+            return (
+              <button
+                key={slot}
+                type="button"
+                role="radio"
+                aria-checked={time === slot}
+                disabled={unavailable}
+                aria-label={date && unavailable ? `${slot} — dolu` : slot}
+                className={`slot ${time === slot ? "slot-active" : ""} ${date && unavailable ? "slot-taken" : ""}`}
+                onClick={() => setTime(slot)}
+              >
+                {slot}
+              </button>
+            );
+          })}
         </div>
       </div>
 

@@ -27,10 +27,7 @@ export default function SuccessView({ reservation, onReset }: Props) {
       </div>
 
       <h2 className="success-title">Sorğunuz qəbul edildi</h2>
-      <p className="success-text">
-        Rezervasiyanız mütəxəssisimizə göndərildi. Təsdiq və ya dəyişiklik
-        barədə nəticə sizə <strong>WhatsApp</strong> vasitəsilə bildiriləcək.
-      </p>
+      <p className="success-text">Sizinlə əlaqə saxlanılacaq.</p>
 
       <dl className="summary">
         <div className="summary-row">

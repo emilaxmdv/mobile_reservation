@@ -198,6 +198,159 @@ body {
   font-weight: 700;
 }
 
+.slot:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.slot:disabled:hover {
+  border-color: var(--card-border);
+  color: var(--text-dim);
+}
+
+.slot-taken {
+  text-decoration: line-through;
+}
+
+/* ── Təqvim ── */
+.calendar {
+  background: var(--bg-soft);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  transition: opacity 0.15s;
+}
+
+.calendar-loading {
+  opacity: 0.65;
+}
+
+.calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.calendar-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.calendar-nav {
+  font: inherit;
+  font-size: 1.3rem;
+  line-height: 1;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--card-border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.calendar-nav:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.calendar-nav:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.calendar-weekday {
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-faint);
+  padding: 4px 0;
+}
+
+.calendar-day {
+  font: inherit;
+  font-size: 0.88rem;
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.calendar-day-available:hover {
+  border-color: rgba(217, 179, 106, 0.5);
+}
+
+.calendar-day-today {
+  border-color: var(--card-border);
+}
+
+.calendar-day:disabled {
+  cursor: not-allowed;
+}
+
+.calendar-day-past {
+  color: var(--text-faint);
+  opacity: 0.45;
+}
+
+.calendar-day-closed {
+  color: var(--error-text);
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.calendar-day-full {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.calendar-day-selected,
+.calendar-day-selected:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+
+.calendar-legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+
+.calendar-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.legend-closed {
+  background: var(--error-text);
+  opacity: 0.55;
+}
+
+.legend-full {
+  background: var(--text-faint);
+}
+
 /* ── Xəta ── */
 .error {
   background: var(--error-bg);

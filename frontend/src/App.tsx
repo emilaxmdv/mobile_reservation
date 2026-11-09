@@ -21,7 +21,7 @@ export default function App() {
         <h1 className="title">Vaxtınızı ayırın</h1>
         <p className="subtitle">
           Formu doldurun — rezervasiyanız mütəxəssisimiz tərəfindən yoxlanılır
-          və nəticə sizə WhatsApp vasitəsilə bildirilir.
+          və sizinlə əlaqə saxlanılır.
         </p>
       </header>
 
@@ -44,8 +44,7 @@ export default function App() {
           </p>
         )}
         <p className="footer-note">
-          Təsdiq bildirişi WhatsApp ilə göndərilir · Məlumatlarınız üçüncü
-          tərəflə paylaşılmır
+          Məlumatlarınız üçüncü tərəflə paylaşılmır
         </p>
       </footer>
     </div>

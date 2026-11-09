@@ -1,27 +1,29 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { RESERVATIONS_COLLECTION } from "./_lib/constants";
-import { optionalEnv, requireEnv } from "./_lib/env";
+import { optionalEnv } from "./_lib/env";
 import { getDb } from "./_lib/firebase";
+import {
+  escapeHtml,
+  notifyChatIdFromEnv,
+  sendMessage,
+  telegramConfigFromEnv,
+} from "./_lib/telegram";
 import { ReservationDoc } from "./_lib/types";
-import { addDaysToDateString, bakuDateString, formatDateAz } from "./_lib/utils";
-import { sendTextMessage, whatsappConfigFromEnv } from "./_lib/whatsapp";
+import {
+  addDaysToDateString,
+  bakuDateString,
+  formatDateAz,
+  formatPhoneDisplay,
+} from "./_lib/utils";
 
 /**
- * /api/birthday-check — köhnə scheduled Cloud Function-un yerini tutur.
- * Vercel Cron tərəfindən gündə bir dəfə çağırılır (bax: vercel.json —
- * "0 5 * * *" UTC = 09:00 Bakı vaxtı): düz 7 gün sonra doğum günü olan
- * müştəriləri tapır və mağaza sahibinin/mütəxəssisin nömrəsinə daxili
- * xatırlatma göndərir.
+ * /api/birthday-check — Vercel Cron tərəfindən gündə bir dəfə çağırılır
+ * (bax: vercel.json — "0 5 * * *" UTC = 09:00 Bakı vaxtı): düz 7 gün sonra
+ * doğum günü olan müştəriləri tapır və Telegram-a daxili xatırlatma göndərir
+ * (TELEGRAM_OWNER_CHAT_ID varsa ora, yoxdursa TELEGRAM_CHAT_ID-yə).
  *
  * Sorğu ucuzdur: rezervasiya yaradılarkən hesablanmış "birthMonthDay" ("MM-DD")
  * sahəsi üzrə bərabərlik sorğusu — bütün kolleksiyanı skan etmirik.
- *
- * QEYD: Gələcəkdə birbaşa MÜŞTƏRİYƏ avtomatik təbrik mesajı göndərilmək
- * istənsə, bu, 24 saatlıq service-window-dan kənar biznes-təşəbbüslü mesaj
- * olduğu üçün Meta-da əvvəlcədən təsdiqlənmiş "utility" kateqoriyalı template
- * tələb olunur və conversation-based qiymətləndirməyə görə hər mesaj başına
- * kiçik xərc yaranacaq. Hazır kod üçün _lib/whatsapp.ts-dəki
- * sendTemplateMessage funksiyasından istifadə edin.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   // CRON_SECRET təyin olunubsa, yalnız Vercel Cron-un öz çağırışları qəbul
@@ -58,18 +60,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       if (!uniqueByPhone.has(r.phone)) uniqueByPhone.set(r.phone, r);
     }
 
-    const cfg = whatsappConfigFromEnv();
-    // Xatırlatma sahibin nömrəsinə gedir; təyin olunmayıbsa mütəxəssisə.
-    const recipientNumber =
-      optionalEnv("OWNER_WHATSAPP_NUMBER") ?? requireEnv("SPECIALIST_WHATSAPP_NUMBER");
+    const cfg = telegramConfigFromEnv();
+    const recipientChat = optionalEnv("TELEGRAM_OWNER_CHAT_ID") ?? notifyChatIdFromEnv();
 
     let sent = 0;
     for (const r of uniqueByPhone.values()) {
       const message =
-        `Xatırlatma: ${r.firstName} ${r.lastName}-ın doğum günü ` +
-        `${formatDateAz(targetDate)}-dir (7 gün qalıb).`;
+        `🎂 <b>Xatırlatma:</b> ${escapeHtml(`${r.firstName} ${r.lastName}`)}-ın doğum günü ` +
+        `${formatDateAz(targetDate)}-dir (7 gün qalıb).\n📞 ${formatPhoneDisplay(r.phone)}`;
       try {
-        await sendTextMessage(cfg, recipientNumber, message);
+        await sendMessage(cfg, recipientChat, message);
         sent++;
       } catch (err) {
         console.error("Doğum günü xatırlatması göndərilə bilmədi:", r.phone, err);

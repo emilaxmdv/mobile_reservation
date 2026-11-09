@@ -1,4 +1,4 @@
-import type { ReservationInput, ReservationResult } from "../types";
+import type { Availability, ReservationInput, ReservationResult } from "../types";
 
 // Frontend Firestore-a birbaşa toxunmur və heç bir Firebase SDK daşımır —
 // bütün əməliyyatlar eyni domendəki Vercel API route-ları üzərindən gedir.
@@ -27,6 +27,26 @@ export async function createReservation(
     );
   }
   return body as ReservationResult;
+}
+
+/**
+ * Təqvim üçün dolu/bağlı gün və saatlar. Alına bilməsə null qaytarır —
+ * forma yenə işləyir, son yoxlamanı server edir.
+ */
+export async function fetchAvailability(from: string, to: string): Promise<Availability | null> {
+  try {
+    const res = await fetch(
+      `/api/availability?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+    );
+    if (!res.ok) return null;
+    const body = (await res.json()) as Partial<Availability>;
+    return {
+      closedDays: Array.isArray(body.closedDays) ? body.closedDays : [],
+      takenSlots: body.takenSlots && typeof body.takenSlots === "object" ? body.takenSlots : {},
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**

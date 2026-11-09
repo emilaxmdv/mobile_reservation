@@ -1,22 +1,23 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { FieldValue } from "firebase-admin/firestore";
+import { isSlotBlocked } from "./_lib/blocks";
 import {
+  BLOCKS_COLLECTION,
   PUBLIC_STATS_DOC,
   RESERVATIONS_COLLECTION,
   SERVICES,
   TIME_SLOTS,
 } from "./_lib/constants";
-import { requireEnv } from "./_lib/env";
 import { getDb } from "./_lib/firebase";
-import { CreateReservationInput } from "./_lib/types";
+import { newReservationHtml } from "./_lib/messages";
+import { notifyChatIdFromEnv, sendMessage, telegramConfigFromEnv } from "./_lib/telegram";
+import { BlockDoc, CreateReservationInput } from "./_lib/types";
 import {
   bakuDateString,
   bakuTimeString,
-  formatDateAz,
   isValidDateString,
   normalizePhone,
 } from "./_lib/utils";
-import { sendInteractiveButtons, whatsappConfigFromEnv } from "./_lib/whatsapp";
 
 /** İstifadəçiyə göstərilən status kodu + Azərbaycan dilində mesaj daşıyan xəta. */
 class ApiError extends Error {
@@ -97,10 +98,10 @@ function validateInput(data: CreateReservationInput): ValidatedReservation {
 }
 
 /**
- * POST /api/create-reservation — köhnə HTTPS Callable funksiyanın yerini tutur.
- * Yeganə yazı qapısı: frontend Firestore-a BİRBAŞA yazmır. Sənəd yaranan kimi
- * (trigger gözləmədən) mütəxəssisə WhatsApp Təsdiq/Ləğv düymələri elə burada
- * göndərilir — köhnə onCreate trigger-in işini indi bu route özü görür.
+ * POST /api/create-reservation — yeganə yazı qapısı: frontend Firestore-a
+ * BİRBAŞA yazmır. Sənəd yaranan kimi Ajoure işçisinə Telegram-da
+ * Təsdiq/Ləğv düymələri ilə mesaj gedir. Müştəriyə avtomatik mesaj getmir —
+ * işçi onunla özü əlaqə saxlayır.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -127,6 +128,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     // ── Slot münaqişəsi yoxlaması + yazı (tranzaksiya daxilində) ─────────────
     const reservationId = await db.runTransaction(async (tx) => {
+      // İşçinin Telegram-dan bağladığı gün/saat
+      const blockSnap = await tx.get(db.collection(BLOCKS_COLLECTION).doc(input.date));
+      const block = blockSnap.data() as BlockDoc | undefined;
+      if (isSlotBlocked(block, input.time)) {
+        throw new ApiError(
+          409,
+          block?.allDay
+            ? "Seçdiyiniz gün qeyri-iş günüdür. Zəhmət olmasa başqa tarix seçin."
+            : "Seçdiyiniz saat doludur. Zəhmət olmasa başqa vaxt seçin."
+        );
+      }
+
       // Eyni tarix+saat slotunda artıq TƏSDİQLƏNMİŞ rezervasiya varsa — rədd et.
       const confirmedSnap = await tx.get(
         reservations
@@ -154,7 +167,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       if (!duplicateSnap.empty) {
         throw new ApiError(
           409,
-          "Bu tarix və saat üçün artıq sorğunuz var. WhatsApp təsdiqini gözləyin."
+          "Bu tarix və saat üçün artıq sorğunuz var. Sizinlə əlaqə saxlanılacaq."
         );
       }
 
@@ -181,33 +194,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return ref.id;
     });
 
-    // ── Mütəxəssisə dərhal WhatsApp bildirişi (trigger yoxdur, birbaşa) ──────
-    const bodyText =
-      `Yeni rezervasiya\n` +
-      `Tarix: ${formatDateAz(input.date)} ${input.time}\n` +
-      `Müştəri: ${input.firstName} ${input.lastName}\n` +
-      `Xidmət: ${input.service}\n` +
-      `Telefon: +${input.phone}\n\n` +
-      `Zəhmət olmasa yoxlayın.`;
-
+    // ── İşçiyə Telegram bildirişi ────────────────────────────────────────────
     try {
-      const messageId = await sendInteractiveButtons(
-        whatsappConfigFromEnv(),
-        requireEnv("SPECIALIST_WHATSAPP_NUMBER"),
-        bodyText,
+      const cfg = telegramConfigFromEnv();
+      const chatId = notifyChatIdFromEnv();
+      const messageId = await sendMessage(cfg, chatId, newReservationHtml(input), [
         [
-          // Düymə ID-ləri webhook-da geri açılır: "<əməliyyat>:<sənəd ID>"
-          { id: `confirm:${reservationId}`, title: "Təsdiq et" },
-          { id: `decline:${reservationId}`, title: "Ləğv et" },
-        ]
-      );
-      await reservations
-        .doc(reservationId)
-        .update({ specialistNotifiedAt: new Date(), specialistMessageId: messageId });
+          // callback_data webhook-da geri açılır: "<əməliyyat>:<sənəd ID>"
+          { text: "✅ Təsdiq et", callback_data: `confirm:${reservationId}` },
+          { text: "❌ Ləğv et", callback_data: `decline:${reservationId}` },
+        ],
+      ]);
+      await reservations.doc(reservationId).update({
+        specialistNotifiedAt: FieldValue.serverTimestamp(),
+        telegramChatId: chatId,
+        telegramMessageId: messageId,
+      });
     } catch (err) {
       // Bildiriş alınmasa belə rezervasiya Firestore-da qalır — xəta Vercel
       // loglarında görünür, sənəddə də qeyd olunur.
-      console.error("Mütəxəssisə WhatsApp bildirişi göndərilə bilmədi:", err);
+      console.error("İşçiyə Telegram bildirişi göndərilə bilmədi:", err);
       await reservations
         .doc(reservationId)
         .update({ specialistNotifyError: String(err) })

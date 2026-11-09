@@ -29,6 +29,17 @@ export interface ReservationDoc {
   createdAt: Timestamp;
   updatedAt: Timestamp;
   decidedAt: Timestamp | null;
-  /** Qərarı verən mütəxəssisin WhatsApp nömrəsi (webhook-dan gəlir). */
+  /** Qərarı verən işçi: "tg:<user id> <ad> (@username)". */
   decidedBy: string | null;
+}
+
+/** blocks/{YYYY-MM-DD}: işçinin Telegram-dan bağladığı gün və ya saatlar. */
+export interface BlockDoc {
+  date: string; // "YYYY-MM-DD" — sənəd ID-si ilə eyni, aralıq sorğuları üçün
+  allDay: boolean;
+  /** allDay=false olanda bağlı saatlar ("HH:mm"), sıralı. */
+  times: string[];
+  reason: string;
+  updatedBy: string;
+  updatedAt: Timestamp;
 }

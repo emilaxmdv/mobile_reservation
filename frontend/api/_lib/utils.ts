@@ -39,9 +39,37 @@ export function formatDateAz(isoDate: string): string {
   return `${d}.${m}.${y}`;
 }
 
+const WEEKDAYS_AZ = [
+  "Bazar",
+  "Bazar ertəsi",
+  "Çərşənbə axşamı",
+  "Çərşənbə",
+  "Cümə axşamı",
+  "Cümə",
+  "Şənbə",
+] as const;
+
+/** "YYYY-MM-DD" → həftə gününün Azərbaycan dilində adı. */
+export function weekdayAz(isoDate: string): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  return WEEKDAYS_AZ[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+}
+
+/** "994501234567" → "+994 50 123 45 67" */
+export function formatPhoneDisplay(phone: string): string {
+  const m = /^994(\d{2})(\d{3})(\d{2})(\d{2})$/.exec(phone);
+  return m ? `+994 ${m[1]} ${m[2]} ${m[3]} ${m[4]}` : `+${phone}`;
+}
+
+/** İki tarix arasındakı (hər ikisi daxil) bütün günlər. */
+export function enumerateDates(from: string, to: string): string[] {
+  const out: string[] = [];
+  for (let d = from; d <= to; d = addDaysToDateString(d, 1)) out.push(d);
+  return out;
+}
+
 /**
- * Telefonu normallaşdırır → "994501234567" (E.164, "+" işarəsiz — WhatsApp API
- * məhz bu formatı qəbul edir). Qəbul olunan girişlər:
+ * Telefonu normallaşdırır → "994501234567" (E.164, "+" işarəsiz). Qəbul olunan girişlər:
  *   "+994 50 123 45 67", "0501234567", "994501234567"
  * Etibarsızdırsa null qaytarır.
  */

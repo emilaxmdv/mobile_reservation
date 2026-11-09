@@ -1,4 +1,4 @@
-// DİQQƏT: Bu siyahılar functions/src/constants.ts ilə SİNXRON saxlanmalıdır.
+// DİQQƏT: Bu siyahılar api/_lib/constants.ts ilə SİNXRON saxlanmalıdır.
 // Server son sözü deyir — buradakı siyahı yalnız istifadəçi interfeysi üçündür.
 
 export const SERVICES = [

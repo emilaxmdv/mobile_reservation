@@ -1,4 +1,4 @@
-/** Callable funksiyaya göndərilən rezervasiya sorğusu. */
+/** /api/create-reservation-a göndərilən rezervasiya sorğusu. */
 export interface ReservationInput {
   firstName: string;
   lastName: string;
@@ -11,4 +11,12 @@ export interface ReservationInput {
 
 export interface ReservationResult {
   reservationId: string;
+}
+
+/** /api/availability cavabı. */
+export interface Availability {
+  /** Bütün günü bağlı (qeyri-iş) günlər. */
+  closedDays: string[];
+  /** Gün → tutulmuş saatlar (təsdiqlənmiş rezervasiya və ya bağlanmış saat). */
+  takenSlots: Record<string, string[]>;
 }

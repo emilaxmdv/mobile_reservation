@@ -28,9 +28,11 @@ export const TIME_SLOTS = [
   "19:00",
 ] as const;
 
-/** WhatsApp Cloud API (Meta Graph API) versiyası. */
-export const GRAPH_API_VERSION = "v23.0";
-
 /** Firestore kolleksiya/sənəd adları. */
 export const RESERVATIONS_COLLECTION = "reservations";
 export const PUBLIC_STATS_DOC = "publicStats/summary";
+/** Bağlı gün/saatlar: sənəd ID-si "YYYY-MM-DD". */
+export const BLOCKS_COLLECTION = "blocks";
+
+/** /api/availability və /bagla aralıq əmrləri üçün maksimum gün sayı. */
+export const MAX_RANGE_DAYS = 62;
