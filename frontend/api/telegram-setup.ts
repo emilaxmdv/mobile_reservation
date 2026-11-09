@@ -10,7 +10,14 @@ import { setMyCommands, setWebhook, telegramConfigFromEnv } from "./_lib/telegra
  * botun əmr menyusunu qeyd edir. Domen dəyişəndə təkrar açmaq kifayətdir.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
-  const expected = requireEnv("TELEGRAM_WEBHOOK_SECRET");
+  let expected: string;
+  try {
+    expected = requireEnv("TELEGRAM_WEBHOOK_SECRET");
+    requireEnv("TELEGRAM_BOT_TOKEN");
+  } catch (err) {
+    res.status(500).json({ ok: false, error: (err as Error).message });
+    return;
+  }
   const given = typeof req.query.secret === "string" ? req.query.secret : "";
   const ok =
     given.length === expected.length &&
