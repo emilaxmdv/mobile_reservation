@@ -16,7 +16,15 @@ export function notifyChatIdFromEnv(): string {
   return requireEnv("TELEGRAM_CHAT_ID");
 }
 
-/** Düymələri basmağa və əmrləri işlətməyə icazəsi olan Telegram user ID-ləri. */
+/** Bildiriş çatı varsa onu qaytarır (webhook quraşdırma zamanı da işləsin deyə xətasız). */
+export function optionalNotifyChatId(): string | undefined {
+  return optionalEnv("TELEGRAM_CHAT_ID");
+}
+
+/**
+ * Düymələri basmağa və əmrləri işlətməyə icazəsi olan Telegram user ID-ləri.
+ * Bundan əlavə, TELEGRAM_CHAT_ID qrupdursa, həmin qrupun hər üzvü icazəlidir (bot.ts).
+ */
 export function adminIdsFromEnv(): Set<string> {
   const raw = optionalEnv("TELEGRAM_ADMIN_IDS") ?? "";
   return new Set(
@@ -119,6 +127,27 @@ export async function setWebhook(
     allowed_updates: ["message", "callback_query"],
     drop_pending_updates: true,
   });
+}
+
+/**
+ * İstifadəçi qrupun hazırkı üzvüdürmü? (bot həmin qrupda olmalıdır)
+ * Çıxmış / qovulmuş / tapılmayan → false.
+ */
+export async function isChatMember(
+  cfg: TelegramConfig,
+  chatId: string | number,
+  userId: number
+): Promise<boolean> {
+  const m = await callApi<{ status: string; is_member?: boolean }>(cfg, "getChatMember", {
+    chat_id: chatId,
+    user_id: userId,
+  });
+  return (
+    m.status === "creator" ||
+    m.status === "administrator" ||
+    m.status === "member" ||
+    (m.status === "restricted" && m.is_member === true)
+  );
 }
 
 export async function setMyCommands(

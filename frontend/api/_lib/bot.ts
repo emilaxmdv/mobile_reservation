@@ -27,6 +27,8 @@ import {
   editMessageText,
   escapeHtml,
   InlineButton,
+  isChatMember,
+  optionalNotifyChatId,
   sendMessage,
   TelegramConfig,
 } from "./telegram";
@@ -72,8 +74,23 @@ function userLabel(u: TgUser): string {
   return `tg:${u.id} ${name}${u.username ? ` (@${u.username})` : ""}`;
 }
 
-function isAdmin(u: TgUser | undefined): boolean {
-  return !!u && adminIdsFromEnv().has(String(u.id));
+/**
+ * İcazə: TELEGRAM_ADMIN_IDS siyahısında olan VƏ YA bildiriş qrupunun
+ * (TELEGRAM_CHAT_ID mənfidirsə) hazırkı üzvü olan istifadəçi.
+ * Beləcə yeni işçini qrupa əlavə etmək kifayətdir; qrupdan çıxan icazəni itirir.
+ */
+async function isAdmin(u: TgUser | undefined, cfg: TelegramConfig): Promise<boolean> {
+  if (!u) return false;
+  if (adminIdsFromEnv().has(String(u.id))) return true;
+  const groupId = optionalNotifyChatId();
+  if (!groupId || !groupId.startsWith("-")) return false;
+  try {
+    return await isChatMember(cfg, groupId, u.id);
+  } catch (err) {
+    // "user not found", bot qrupdan çıxarılıb və s. — icazə vermirik
+    console.warn("Qrup üzvlüyü yoxlanmadı:", err);
+    return false;
+  }
 }
 
 export async function handleUpdate(update: TgUpdate, cfg: TelegramConfig): Promise<void> {
@@ -162,7 +179,7 @@ async function safeEdit(
 }
 
 async function handleCallback(cq: TgCallbackQuery, cfg: TelegramConfig): Promise<void> {
-  if (!isAdmin(cq.from)) {
+  if (!(await isAdmin(cq.from, cfg))) {
     await answerCallbackQuery(cfg, cq.id, "Bu əməliyyat üçün icazəniz yoxdur.", true);
     return;
   }
@@ -338,10 +355,10 @@ async function handleCommand(msg: TgMessage, cfg: TelegramConfig): Promise<void>
     return;
   }
 
-  if (!isAdmin(msg.from)) {
+  if (!(await isAdmin(msg.from, cfg))) {
     // Naməlum istifadəçilərə yalnız /start-a cavab veririk ki, bot "susmuş" görünməsin
     if (cmd === "start") {
-      await reply("Bu bot yalnız Ajoure işçiləri üçündür. /id ilə ID-nizi öyrənib administratora göndərin.");
+      await reply("Bu bot yalnız Ajoure işçiləri üçündür. Sizi Ajoure işçi qrupuna əlavə etmələrini xahiş edin.");
     }
     return;
   }

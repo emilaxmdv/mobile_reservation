@@ -8,10 +8,8 @@ export const TIMEZONE = "Asia/Baku";
 
 /** Mağazanın təklif etdiyi xidmətlər — öz xidmətlərinizi buraya yazın. */
 export const SERVICES = [
-  "Fərdi portret sifarişi",
-  "Ailəvi portret sifarişi",
-  "Konsultasiya",
-  "Hazır işin təhvili",
+  "Tikiliş sifarişi",
+  "Kirayə baxış",
 ] as const;
 
 /** Rezervasiya üçün mümkün saat slotları. */

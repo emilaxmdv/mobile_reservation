@@ -75,7 +75,7 @@ Saytda **dolu** görünən saat = təsdiqlənmiş (`confirmed`) rezervasiya **v�
 | Frontend Firestore-a toxunmur | Bütün əməliyyatlar `/api/*` üzərindən, yalnız Admin SDK |
 | Client girişi bağlı | `firestore.rules`: `allow read, write: if false;` |
 | Webhook saxtakarlığı | Telegram hər sorğuda `X-Telegram-Bot-Api-Secret-Token` göndərir; `TELEGRAM_WEBHOOK_SECRET` ilə uyğun gəlməyən sorğu 401 alır |
-| Kim düymə basa bilər | Yalnız `TELEGRAM_ADMIN_IDS` siyahısındakı Telegram istifadəçiləri. Başqaları üçün düymə xəbərdarlıq verir, əmrlər susur (`/id` istisna) |
+| Kim düymə basa bilər | `TELEGRAM_CHAT_ID` qrupdursa — **həmin qrupun hər hazırkı üzvü** (bot `getChatMember` ilə yoxlayır; qrupdan çıxan icazəni dərhal itirir). Əlavə olaraq `TELEGRAM_ADMIN_IDS` siyahısındakılar. Başqaları üçün düymə xəbərdarlıq verir, əmrlər susur (`/id` istisna). Qrupu bağlı saxlayın: kimi əlavə etsəniz, onun səlahiyyəti olur |
 | Şəxsi məlumat | `/api/availability` yalnız tarix və saat qaytarır — ad/telefon heç vaxt |
 | Server-side validasiya | Keçmiş tarix, dolu/bağlı slot, yanlış telefon tranzaksiya daxilində rədd edilir |
 | Sirlər | Vercel Environment Variables; `VITE_` prefiksi yoxdur, brauzerə düşmür |
@@ -92,7 +92,10 @@ Saytda **dolu** görünən saat = təsdiqlənmiş (`confirmed`) rezervasiya **v�
    - **Bir neçə işçi:** Telegram qrupu yaradın, botu qrupa əlavə edin.
 3. ID-ləri öyrənmək üçün addım 3-dən (deploy + webhook) sonra botda və ya qrupda `/id` yazın:
    - "Bu çatın ID-si" → `TELEGRAM_CHAT_ID` (qrupda mənfi rəqəm olur, məs. `-1001234567890`)
-   - Hər işçinin "Sizin Telegram ID" → `TELEGRAM_ADMIN_IDS` (vergüllə: `123456,789012`)
+   - Qrup istifadə edirsinizsə, işçilərin ID-lərini yığmaq **lazım deyil** — qrup üzvü avtomatik icazəlidir. Yeni işçi = qrupa əlavə et.
+   - `TELEGRAM_ADMIN_IDS` — qrupdan kənar da icazə lazım olanlar (məs. sahib), vergüllə: `123456,789012`
+
+   > Adi qrup "supergroup"a çevrilsə (Telegram bəzi ayarlarda bunu avtomatik edir), qrupun ID-si dəyişir (`-100…`). Onda qrupda yenidən `/id` yazıb `TELEGRAM_CHAT_ID`-ni yeniləyin.
 
    ID-ləri Vercel-ə yazandan sonra **Redeploy** edin.
 
@@ -105,8 +108,8 @@ Saytda **dolu** görünən saat = təsdiqlənmiş (`confirmed`) rezervasiya **v�
 | `FIREBASE_SERVICE_ACCOUNT_KEY` | ✅ | Artıq var (dəyişmir) |
 | `TELEGRAM_BOT_TOKEN` | ✅ | @BotFather-dən |
 | `TELEGRAM_WEBHOOK_SECRET` | ✅ | Təsadüfi sətir, yalnız `A-Z a-z 0-9 _ -` |
-| `TELEGRAM_CHAT_ID` | ✅ | `/id` ilə |
-| `TELEGRAM_ADMIN_IDS` | ✅ | `/id` ilə, vergüllə |
+| `TELEGRAM_CHAT_ID` | ✅ | `/id` ilə (qrupda mənfi rəqəm). Qrupun üzvləri avtomatik icazəlidir |
+| `TELEGRAM_ADMIN_IDS` | — | Qrupdan kənar icazəli ID-lər, vergüllə |
 | `TELEGRAM_OWNER_CHAT_ID` | — | Doğum günü xatırlatmaları ayrıca çata getsin deyə |
 | `CRON_SECRET` | tövsiyə | Cron endpoint-ini qoruyur |
 
@@ -182,7 +185,7 @@ Telegram webhook-u lokal ünvana çata bilmir — botu test etmək üçün deplo
 |---|---|
 | Telegram-a mesaj gəlmir | Vercel logları → "İşçiyə Telegram bildirişi göndərilə bilmədi". `chat not found` → `TELEGRAM_CHAT_ID` yanlışdır və ya botda Start basılmayıb / bot qrupda deyil. `Unauthorized` → token yanlışdır |
 | Düymələr "yüklənir" qalır | Webhook qeyd olunmayıb → addım 3 |
-| Düymə "icazəniz yoxdur" deyir | Basan işçinin ID-si `TELEGRAM_ADMIN_IDS`-də yoxdur → əlavə edib **Redeploy** |
+| Düymə "icazəniz yoxdur" deyir | Basan işçi bildiriş qrupunun üzvü deyil (və `TELEGRAM_ADMIN_IDS`-də də yoxdur) → qrupa əlavə edin |
 | Əmrlərə cavab yoxdur | Eyni səbəb (admin deyil) və ya webhook qeyd olunmayıb |
 | "Mühit dəyişəni çatışmır: …" | Env natamamdır; dəyişəndən sonra **yenidən deploy** lazımdır |
 | Cron işləmir | Vercel → Settings → Cron Jobs; Hobby planda dəqiqlik ±1 saatdır |
